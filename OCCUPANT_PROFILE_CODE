@@ -1,0 +1,344 @@
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using MySql.Data.MySqlClient;
+
+namespace Dorm_Renting_System
+{
+    public partial class occupant_profile : Form
+    {
+        public occupant_profile()
+        {
+            InitializeComponent();
+            x.Click -= x_Click;
+            x.Click += x_Click;
+
+            back.Click -= back_Click;
+            back.Click += back_Click;
+
+            next.Click -= next_Click;
+            next.Click += next_Click;
+            
+            rooms.Click -= rooms_Click;
+            rooms.Click += rooms_Click;
+
+            clear.Click -= clear_Click;
+            clear.Click += clear_Click;
+            save.Click -= save_Click;
+            save.Click += save_Click;
+
+            //****Initializing Functions*** Disable savebtn if there are existing data (occupant_id) and if textbox are empty before enabling 
+            name_txt.TextChanged += CheckEnableButton;
+            age_txt.TextChanged += CheckEnableButton;
+            contact_txt.TextChanged += CheckEnableButton;
+            email_txt.TextChanged += CheckEnableButton;
+            save.Enabled = false;
+
+            //****Initializing Functions*** Disable remove if textbox are empty 
+            removebtn.Click -= removebtn_Click;
+            removebtn.Click += removebtn_Click;
+            occupantID_txt.TextChanged += TextBox_TextChanged;
+            name_txt.TextChanged += TextBox_TextChanged;
+            age_txt.TextChanged += TextBox_TextChanged;
+            gender_txt.TextChanged += TextBox_TextChanged;
+            contact_txt.TextChanged += TextBox_TextChanged;
+            email_txt.TextChanged += TextBox_TextChanged;
+            removebtn.Enabled = false;
+
+        }
+
+        private int currentRecordIndex = 0;
+
+        private void CheckEnableButton(object sender, EventArgs e)
+        {
+            // will enable the button if text box have data
+            save.Enabled =
+                !string.IsNullOrEmpty(name_txt.Text) &&
+                !string.IsNullOrEmpty(age_txt.Text) &&
+                !string.IsNullOrEmpty(contact_txt.Text) &&
+                !string.IsNullOrEmpty(email_txt.Text) &&
+                gender_txt.SelectedIndex != -1;
+                IsOccupantIDUnique(occupantID_txt.Text);
+        }
+
+        //this one validates if theres an existing occupant_Id already
+        private bool IsOccupantIDUnique(string occupantID_txt)
+        {
+            try
+            {
+                using (MySqlConnection connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    connection.Open();
+
+                    string query = "SELECT COUNT(*) FROM profile_tb WHERE Occupant_ID = @OccupantID";
+                    using (MySqlCommand command = new MySqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@OccupantID", occupantID_txt);
+                        int count = Convert.ToInt32(command.ExecuteScalar());
+
+                        // Return true if the count is 0 (Occupant_ID is unique), false otherwise
+                        return count == 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error checking Occupant_ID uniqueness: " + ex.Message);
+                return false;
+            }
+        }
+
+        //save/ adds data to the table
+        private void save_Click(object sender, EventArgs e)
+        {
+            if (!IsOccupantIDUnique(occupantID_txt.Text))
+            {
+                MessageBox.Show("Occupant with the same ID already exists. Please choose a different ID.");
+                return;
+            }
+            try
+            {
+                using (MySqlConnection save_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    save_connection.Open();
+
+                    
+                    string query = "INSERT INTO profile_tb (Occupant_Name, Occupant_Age, Occupant_Gender, Occupant_Contact, Occupant_Email) VALUES (@Name, @Age, @Gender, @Contact, @Email)";
+
+                    using (MySqlCommand command = new MySqlCommand(query, save_connection))
+                    {
+                        
+                        command.Parameters.AddWithValue("@Name", name_txt.Text);
+                        command.Parameters.AddWithValue("@Age", int.Parse(age_txt.Text));
+                        command.Parameters.AddWithValue("@Gender", gender_txt.Text);
+                        command.Parameters.AddWithValue("@Contact", contact_txt.Text);
+                        command.Parameters.AddWithValue("@Email", email_txt.Text);
+
+                        command.ExecuteNonQuery();
+                        MessageBox.Show("Occupant profile saved successfully.");
+                    }
+                } 
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            
+            BindData();
+            occupantID_txt.Clear();
+            name_txt.Clear();
+            age_txt.Clear();
+            contact_txt.Clear();
+            email_txt.Clear();
+
+            gender_txt.SelectedIndex = -1; 
+        }
+
+        //Binds the data to be able to view it from the datagrid
+        void BindData()
+        {
+            MySqlConnection bind_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password=");
+            MySqlCommand bindcommand = new MySqlCommand("SELECT * FROM profile_tb", bind_connection);
+            MySqlDataAdapter adapter = new MySqlDataAdapter(bindcommand);
+            DataTable dt = new DataTable();
+            adapter.Fill(dt);
+            dataGridView1.DataSource = dt;
+
+        }
+
+        private void x_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void occupant_profile_Load(object sender, EventArgs e)
+        {
+            BindData();
+        }
+
+        //displays the value of the datagrid in each respective textboxes
+        private void DisplayRecord(int index)
+        {
+            if (index >= 0 && index < dataGridView1.Rows.Count)
+            {
+                DataGridViewRow row = dataGridView1.Rows[index];
+
+                // Check if the row is not null and is not a new row
+                if (row != null && !row.IsNewRow)
+                {
+                    // Update textboxes with data from the current record
+                    occupantID_txt.Text = row.Cells["Occupant_ID"].Value.ToString();
+                    name_txt.Text = row.Cells["Occupant_Name"].Value.ToString();
+                    age_txt.Text = row.Cells["Occupant_Age"].Value.ToString();
+                    gender_txt.Text = row.Cells["Occupant_Gender"].Value.ToString();
+                    contact_txt.Text = row.Cells["Occupant_Contact"].Value.ToString();
+                    email_txt.Text = row.Cells["Occupant_Email"].Value.ToString();
+                }
+            }
+        }
+
+        //if there are changes made, updates the data
+        private void update_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using (MySqlConnection update_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    update_connection.Open();
+
+                    string update_query = "UPDATE profile_tb SET Occupant_Name = @Name, Occupant_Age = @Age, Occupant_Gender = @Gender, Occupant_Contact = @Contact, Occupant_Email = @Email WHERE Occupant_ID = @OccupantID;";
+
+                    using (MySqlCommand command = new MySqlCommand(update_query, update_connection))
+                    {
+                        command.Parameters.AddWithValue("@Name", name_txt.Text);
+                        command.Parameters.AddWithValue("@Age", int.Parse(age_txt.Text));
+                        command.Parameters.AddWithValue("@Gender", gender_txt.Text);
+                        command.Parameters.AddWithValue("@Contact", contact_txt.Text);
+                        command.Parameters.AddWithValue("@Email", email_txt.Text);
+                        command.Parameters.AddWithValue("@OccupantID", occupantID_txt.Text);
+
+                        command.ExecuteNonQuery();
+                        MessageBox.Show("Occupant profile updated successfully.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: Please Choose Data Below to Update " + ex.Message);
+            }
+            BindData();
+            occupantID_txt.Clear();
+            name_txt.Clear();
+            age_txt.Clear();
+            contact_txt.Clear();
+            email_txt.Clear();
+
+
+            gender_txt.SelectedIndex = -1; // Set the selected index to -1 to clear the selection
+        }
+
+        private void back_Click(object sender, EventArgs e)
+        {
+            if (currentRecordIndex > 0)
+            {
+                currentRecordIndex--;
+                DisplayRecord(currentRecordIndex);
+            }
+        }
+
+        private void next_Click(object sender, EventArgs e)
+        {
+            // Check if there are next records
+            if (currentRecordIndex < dataGridView1.Rows.Count - 1)
+            {
+                currentRecordIndex++;
+                DisplayRecord(currentRecordIndex);
+            }
+        }
+
+        private void clear_Click(object sender, EventArgs e)
+        {
+            occupantID_txt.Clear();
+            name_txt.Clear();
+            age_txt.Clear();
+            contact_txt.Clear();
+            email_txt.Clear();
+
+            
+            gender_txt.SelectedIndex = -1; 
+        }
+
+        //allows admin to view data from table instantly without navigating using the buttons
+        private void dataGridView1_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            try
+            {
+                using(MySqlConnection cell_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    if (dataGridView1.SelectedRows.Count > 0 && e.RowIndex != -1)
+                    {
+                        cell_connection.Open();
+                        occupantID_txt.Text = dataGridView1.SelectedRows[0].Cells[0].Value.ToString();
+                        name_txt.Text = dataGridView1.SelectedRows[0].Cells[1].Value.ToString();
+                        age_txt.Text = dataGridView1.SelectedRows[0].Cells[2].Value.ToString();
+                        gender_txt.Text = dataGridView1.SelectedRows[0].Cells[3].Value.ToString();
+                        contact_txt.Text = dataGridView1.SelectedRows[0].Cells[4].Value.ToString();
+                        email_txt.Text = dataGridView1.SelectedRows[0].Cells[5].Value.ToString();
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Access Denied", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void TextBox_TextChanged(object sender, EventArgs e)
+        {
+            // Whenever any textbox text changes, check the state of the remove button
+            CheckRemoveButtonState();
+        }
+            
+        private void CheckRemoveButtonState()
+        {
+            // Disable the remove button if any of the textboxes is empty
+            removebtn.Enabled = !string.IsNullOrWhiteSpace(occupantID_txt.Text)
+                        && !string.IsNullOrWhiteSpace(name_txt.Text)
+                        && !string.IsNullOrWhiteSpace(age_txt.Text)
+                        && !string.IsNullOrWhiteSpace(gender_txt.Text)
+                        && !string.IsNullOrWhiteSpace(contact_txt.Text)
+                        && !string.IsNullOrWhiteSpace(email_txt.Text);
+        }
+
+        //remove occupant from the list
+        private void removebtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using(MySqlConnection remove_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    remove_connection.Open();
+
+                    string remove_query = "DELETE FROM profile_tb WHERE Occupant_ID = @OccupantID;";
+
+                    using (MySqlCommand command = new MySqlCommand(remove_query, remove_connection))
+                    {
+                        
+                        command.Parameters.AddWithValue("@OccupantID", occupantID_txt.Text);
+
+                        command.ExecuteNonQuery();
+                        MessageBox.Show("Occupant profile removed successfully.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            BindData();
+            occupantID_txt.Clear();
+            name_txt.Clear();
+            age_txt.Clear();
+            contact_txt.Clear();
+            email_txt.Clear();
+
+
+            gender_txt.SelectedIndex = -1;
+            CheckRemoveButtonState();
+        }
+
+        private void rooms_Click(object sender, EventArgs e)
+        {
+            room room_management = new room();
+            room_management.Show();
+            this.Hide();
+        }
+    }
+}
