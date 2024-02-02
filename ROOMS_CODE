@@ -1,0 +1,250 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows.Forms;
+using MySql.Data.MySqlClient;
+using Mysqlx.Prepare;
+
+namespace Dorm_Renting_System
+{
+    public partial class room : Form
+    {
+        public room()
+        {
+            InitializeComponent();
+            populateComboBox();
+
+            profile.Click -= profile_Click;
+            profile.Click += profile_Click;
+
+            backbtn.Click -= backbtn_Click;
+            backbtn.Click += backbtn_Click;
+            nextbtn.Click -= nextbtn_Click;
+            nextbtn.Click += nextbtn_Click;
+        }
+        private int currentRecordIndex = 0;
+        
+        void BindData()
+        {
+            MySqlConnection bind_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password=");
+            MySqlCommand bindcommand = new MySqlCommand("SELECT * FROM tb_room", bind_connection);
+            MySqlDataAdapter adapter = new MySqlDataAdapter(bindcommand);
+            DataTable dt = new DataTable();
+            adapter.Fill(dt);
+            dataGridView1.DataSource = dt;
+        }
+
+        private void room_Load(object sender, EventArgs e)
+        {
+            BindData();
+        }
+
+        private void populateComboBox()
+        {
+            try
+            {
+                using(MySqlConnection combo_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    combo_connection.Open();
+
+                    string combo_query = "SELECT Occupant_ID, Occupant_Name FROM profile_tb;";
+                    MySqlCommand combo_command = new MySqlCommand(combo_query, combo_connection);
+
+                    using (MySqlDataReader reader = combo_command.ExecuteReader())
+                    {
+                        while(reader.Read())
+                        {
+                            string item = $"{reader["Occupant_ID"].ToString()} - {reader["Occupant_Name"].ToString()}";
+                            txtOccupant.Items.Add(item);
+                        }
+                    }
+                }
+            }
+            catch(Exception ex) 
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+           
+        }
+
+        private void profile_Click(object sender, EventArgs e)
+        {
+            occupant_profile profile = new occupant_profile();
+            profile.Show();
+            this.Hide();
+        }
+
+        private void DisplayRecord(int index)
+        {
+            if (index >= 0 && index < dataGridView1.Rows.Count)
+            {
+                DataGridViewRow row = dataGridView1.Rows[index];
+
+                // Check if the row is not null and is not a new row
+                if (row != null && !row.IsNewRow)
+                {
+                    // Update textboxes with data from the current record
+                    txtRoom.Text = row.Cells["Room_Number"].Value?.ToString();
+                    txtOccupant.Text = row.Cells["Occupant_ID"].Value?.ToString();
+                    txtLocation.Text = row.Cells["Room_Location"].Value?.ToString();
+                    txtStatus.SelectedItem = !string.IsNullOrEmpty("Occupant_ID") ? "Occupied" : "Unoccupied";
+
+                    txtStatus.Text = row.Cells["Room_Status"].Value?.ToString();
+                }
+            }
+        }
+
+        private void backbtn_Click(object sender, EventArgs e)
+        {
+            if (currentRecordIndex > 0)
+            {
+                currentRecordIndex--;
+                DisplayRecord(currentRecordIndex);
+            }
+        }
+
+        private void nextbtn_Click(object sender, EventArgs e)
+        {
+            // Check if there are next records
+            if (currentRecordIndex < dataGridView1.Rows.Count - 1)
+            {
+                currentRecordIndex++;
+                DisplayRecord(currentRecordIndex);
+            }
+        }
+
+        private void assignbtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Get the selected item from txtOccupant ComboBox
+                string selectedOccupant = txtOccupant.SelectedItem?.ToString();
+
+                if (!string.IsNullOrEmpty(selectedOccupant))
+                {
+                    // Split the selected item to extract Occupant_ID
+                    string[] occupantParts = selectedOccupant.Split('-');
+                    int occupantID;
+
+                    if (occupantParts.Length == 2 && int.TryParse(occupantParts[0].Trim(), out occupantID))
+                    {
+                        // Update tb_rooms table with the new Occupant_ID and change status to 'Occupied'
+                        using (MySqlConnection updateConnection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                        {
+                            updateConnection.Open();
+
+                            string updateQuery = "UPDATE tb_room SET Occupant_ID = @OccupantID, Room_Status = 'Occupied' WHERE Room_Number = @RoomNumber;";
+                            MySqlCommand updateCommand = new MySqlCommand(updateQuery, updateConnection);
+
+                            updateCommand.Parameters.AddWithValue("@OccupantID", occupantID);
+                            updateCommand.Parameters.AddWithValue("@RoomNumber", txtRoom.Text);
+
+                            int rowsAffected = updateCommand.ExecuteNonQuery();
+
+                            if (rowsAffected > 0)
+                            {
+                                MessageBox.Show("Room assigned successfully.");
+                                BindData(); // Refresh the DataGridView with updated data
+                            }
+                            else
+                            {
+                                MessageBox.Show("Room assignment failed.");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        MessageBox.Show("Invalid format for selected occupant.");
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Please select an occupant.");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            BindData();
+        }
+
+        private void removebtn_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Update tb_rooms table to remove Occupant_ID and change status to 'Unoccupied'
+                using (MySqlConnection updateConnection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    updateConnection.Open();
+
+                    string updateQuery = "UPDATE tb_room SET Occupant_ID = NULL, Room_Status = 'Unoccupied' WHERE Room_Number = @RoomNumber;";
+                    MySqlCommand updateCommand = new MySqlCommand(updateQuery, updateConnection);
+
+                    updateCommand.Parameters.AddWithValue("@RoomNumber", txtRoom.Text);
+
+                    int rowsAffected = updateCommand.ExecuteNonQuery();
+
+                    if (rowsAffected > 0)
+                    {
+                        MessageBox.Show("Occupant removed successfully.");
+                        BindData(); // Refresh the DataGridView with updated data
+                    }
+                    else
+                    {
+                        MessageBox.Show("Occupant removal failed.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+            BindData();
+        }
+
+        private void x_Click(object sender, EventArgs e)
+        {
+            Application.Exit();
+        }
+
+        private void button6_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                using(MySqlConnection search_connection = new MySqlConnection("server=localhost; port=3307; user=pma; database=dormitory; password="))
+                {
+                    search_connection.Open();
+
+                    string search_query = "SELECT * FROM tb_room WHERE Room_Number=" + int.Parse(txtRoom.Text);
+                    using(MySqlCommand searchCommand = new MySqlCommand(search_query, search_connection))
+                    {
+                        using(MySqlDataReader reader = searchCommand.ExecuteReader())
+                        {
+                            if(reader.Read())
+                            {
+                                txtRoom.Text = reader["Room_Number"].ToString();
+                                txtOccupant.Text = reader["Occupant_ID"].ToString();
+                                txtLocation.Text = reader["Room_Location"].ToString();
+                                txtStatus.Text = reader["Room_Status"].ToString();
+                            }
+                            else
+                            {
+                                MessageBox.Show("Room not found.");
+                            }
+                        }
+                    }
+                }
+            }
+            catch(Exception ex)
+            {
+                MessageBox.Show("Error: " + ex.Message);
+            }
+        }
+    }
+}
